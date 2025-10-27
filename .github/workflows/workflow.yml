@@ -40,8 +40,8 @@ jobs:
       - name: Extract source and target branch info
         id: branch
         run: |
-          src_branch="${{ github.head.ref }}"   # e.g. feature/TEST-12344
-          target_branch="${{ github.base.ref }}" # e.g. develop or stage
+          src_branch="${{ github.head_name }}"   # e.g. feature/TEST-12344
+          target_branch="${{ github.ref_name }}" # e.g. develop or stage
           echo "Source branch: $src_branch"
           echo "Target branch: $target_branch"
           
@@ -52,12 +52,12 @@ jobs:
       - name: Set prefix based on target branch
         id: prefix
         run: |
-          if [[ "${{ github.base.ref }}" == "develop" ]]; then
+          if [[ "${{ github.ref_name }}" == "develop" ]]; then
             echo "prefix=dev" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.base.ref }}" == "stage" ]]; then
+          elif [[ "${{ github.ref_name }}" == "stage" ]]; then
             echo "prefix=rel" >> $GITHUB_OUTPUT
           else
-            echo "❌ Unsupported target branch: ${{ github.base.ref }}"
+            echo "❌ Unsupported target branch: ${{ github.ref_name }}"
             exit 1
           fi
 
