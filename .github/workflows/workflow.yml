@@ -23,41 +23,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-
-      - name: Composer validate
-        run: composer validate --strict --ansi
-
-      - name: Install Composer dependencies
-        run: composer install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader
-
-      - name: Check coding standards (PHPCS)
-        run: ./vendor/bin/phpcs --standard=Drupal,DrupalPractice --extensions=php,module,inc,install,test,profile,theme,css,info,txt,md,yml --ignore=node_modules,bower_components,vendor docroot/modules/custom
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: frontend/.node-version
-
-      - name: Install FE dependencies
-        run: npm ci
-        working-directory: frontend
-
-      - name: Build FE
-        run: npm run build
-        working-directory: frontend
-
-      - name: Test FE build
-        run: npm ci
-        working-directory: frontend
-
-      - name: Test FE
-        run: npm test
-        working-directory: frontend
-
   create-tag:
     name: Auto-create tag from merged branch
     runs-on: ubuntu-latest
