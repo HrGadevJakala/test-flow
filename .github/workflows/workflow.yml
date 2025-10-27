@@ -37,12 +37,6 @@ jobs:
       - name: Fetch all tags
         run: git fetch --tags
 
-      - name: Print full GitHub event JSON
-        run: |
-          echo "---- GITHUB EVENT START ----"
-          cat "$GITHUB_EVENT_PATH"
-          echo "---- GITHUB EVENT END ----"
-
       - name: Extract source and target branch info
         id: branch
         run: |
@@ -58,12 +52,12 @@ jobs:
       - name: Set prefix based on target branch
         id: prefix
         run: |
-          if [[ "${{ steps.branch.outputs.target_branch }}" == "develop" ]]; then
+          if [[ "${{ github.base_ref }}" == "develop" ]]; then
             echo "prefix=dev" >> $GITHUB_OUTPUT
-          elif [[ "${{ steps.branch.outputs.target_branch }}" == "stage" ]]; then
-            echo "prefix=stage" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.base_ref }}" == "stage" ]]; then
+            echo "prefix=rel" >> $GITHUB_OUTPUT
           else
-            echo "❌ Unsupported target branch: ${{ steps.branch.outputs.target_branch }}"
+            echo "❌ Unsupported target branch: ${{ github.base_ref }}"
             exit 1
           fi
 
