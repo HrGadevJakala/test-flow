@@ -1,0 +1,142 @@
+name: CGIAR CICD
+
+on:
+  push:
+    branches: [ "develop" ]
+    tags: [ '[0-9]+\.[0-9]+\.[0-9]+' ]
+  pull_request:
+    branches: [ "develop" ]
+
+permissions:
+  contents: write
+
+env:
+  HUSKY: 0
+  TAG_NAME: ${{ github.ref_name }}
+
+jobs:
+  build:
+    name: Build BE & FE
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Composer validate
+        run: composer validate --strict --ansi
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader
+
+      - name: Check coding standards (PHPCS)
+        run: ./vendor/bin/phpcs --standard=Drupal,DrupalPractice --extensions=php,module,inc,install,test,profile,theme,css,info,txt,md,yml --ignore=node_modules,bower_components,vendor docroot/modules/custom
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+
+      - name: Install FE dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build FE
+        run: npm run build
+        working-directory: frontend
+
+      - name: Test FE build
+        run: npm ci
+        working-directory: frontend
+
+      - name: Test FE
+        run: npm test
+        working-directory: frontend
+
+  create-tag:
+    name: Auto-create tag from merged branch
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/stage'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Determine source branch and ticket
+        id: extract_branch
+        run: |
+          # GitHub provides head_ref for pull_request events and ref for direct pushes
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            src_branch="${{ github.head_ref }}"
+          else
+            # For direct merges or pushes
+            src_branch=$(git branch -r --contains ${{ github.sha }} | grep -E 'feature/' | head -n 1 | sed 's#.*/##')
+          fi
+
+          if [ -z "$src_branch" ]; then
+            echo "❌ Could not determine source (feature) branch."
+            exit 1
+          fi
+
+          echo "Source branch: $src_branch"
+          ticket_id=$(echo "$src_branch" | sed -E 's#.*/##') # Extract e.g. TEST-12344
+          echo "ticket_id=$ticket_id" >> $GITHUB_OUTPUT
+
+      - name: Determine prefix based on target branch
+        id: prefix
+        run: |
+          if [[ "${GITHUB_REF}" == "refs/heads/develop" ]]; then
+            echo "prefix=dev" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF}" == "refs/heads/stage" ]]; then
+            echo "prefix=rel" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Unsupported target branch: ${GITHUB_REF}"
+            exit 1
+          fi
+
+      - name: Determine next available tag
+        id: next_tag
+        run: |
+          base_tag="${{ steps.prefix.outputs.prefix }}-${{ steps.extract_branch.outputs.ticket_id }}"
+          echo "Base tag: $base_tag"
+
+          existing_tags=$(git tag -l "${base_tag}*")
+          if [ -z "$existing_tags" ]; then
+            new_tag="$base_tag"
+          else
+            count=$(echo "$existing_tags" | grep -E "^${base_tag}(-[0-9]+)?$" | wc -l | tr -d ' ')
+            next_num=$((count + 1))
+            new_tag="${base_tag}-${next_num}"
+          fi
+
+          echo "✅ New tag will be: $new_tag"
+          echo "tag=$new_tag" >> $GITHUB_OUTPUT
+
+      - name: Create and push new tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git tag ${{ steps.next_tag.outputs.tag }}
+          git push origin ${{ steps.next_tag.outputs.tag }}
+
+  deploy-to-acquia:
+    name: Deploy to Acquia with tag
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Debug - Print environment and workspace
+        run: |
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "Workspace=$GITHUB_WORKSPACE"
+          env
