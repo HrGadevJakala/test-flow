@@ -3,7 +3,8 @@ name: CGIAR CICD
 on:
   push:
     branches: [ "develop", "stage" ]
-    tags: [ '[0-9]+\.[0-9]+\.[0-9]+' ]
+    tags:
+      - '{dev-*,rel-*}'
   pull_request:
     branches: [ "develop", "stage" ]
     types: [opened, reopened, synchronize, closed]
