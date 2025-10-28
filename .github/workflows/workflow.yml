@@ -23,6 +23,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debugs
+        run: |
+          echo "Head ref: ${{ github.event.pull_request.head.ref }}"
+          echo "Base ref: ${{ github.event.pull_request.base.ref }}"
+          echo "head: ${{ github.head_ref }}"
+          echo "base: ${{ github.base_ref }}"
+
   create-tag:
     name: Auto-create tag from merged branch
     runs-on: ubuntu-latest
