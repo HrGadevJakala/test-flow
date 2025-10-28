@@ -6,6 +6,13 @@ on:
       - 'dev-*'
       - 'rel-*'
 
+permissions:
+  contents: write
+
+env:
+  HUSKY: 0
+  TAG_NAME: ${{ github.ref_name }}
+
 jobs:
   deploy-to-acquia:
     name: Deploy to Acquia
