@@ -34,7 +34,8 @@ jobs:
   create-tag:
     name: Auto-create tag from merged branch
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' &&
+    if: >
+      github.event_name == 'pull_request' &&
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true &&
       (github.event.pull_request.base.ref == 'develop' || github.event.pull_request.base.ref == 'stage')
