@@ -6,8 +6,6 @@ on:
     tags: [ '[0-9]+\.[0-9]+\.[0-9]+' ]
   pull_request:
     branches: [ "develop" ]
-    types:
-      - closed
 
 permissions:
   contents: write
@@ -29,7 +27,7 @@ jobs:
     name: Auto-create tag from merged branch
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/stage'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/stage')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,6 +44,7 @@ jobs:
           target_branch="${{ github.base_ref }}" # e.g. develop or stage
           echo "Source branch: $src_branch"
           echo "Target branch: $target_branch"
+          echo "Head ref: ${{ github.event.pull_request.head.ref }}"
           
           ticket_id=$(echo "$src_branch" | sed -E 's#.*/##')  # Extract TEST-12344
           echo "ticket_id=$ticket_id" >> $GITHUB_OUTPUT
