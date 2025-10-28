@@ -3,7 +3,8 @@ name: Deploy on Tag
 on:
   push:
     tags:
-      - '{dev-*,rel-*}'
+      - 'dev-*'
+      - 'rel-*'
 
 jobs:
   deploy-to-acquia:
