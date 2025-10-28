@@ -29,6 +29,7 @@ jobs:
           echo "Base ref: ${{ github.event.pull_request.base.ref }}"
           echo "head: ${{ github.head_ref }}"
           echo "base: ${{ github.base_ref }}"
+          echo "action: ${{ github.event.action }}"
 
   create-tag:
     name: Auto-create tag from merged branch
