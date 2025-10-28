@@ -2,7 +2,8 @@ name: Deploy on Tag
 
 on:
   push:
-    branches: [ "develop", "stage" ]
+    tags:
+      - '*'
 
 permissions:
   contents: write
