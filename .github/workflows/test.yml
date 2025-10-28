@@ -30,3 +30,55 @@ jobs:
           echo "head: ${{ github.head_ref }}"
           echo "base: ${{ github.base_ref }}"
           echo "action: ${{ github.event.action }}"
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Extract source and target branch info
+        id: branch
+        run: |
+          src_branch="${{ github.head_ref }}"   # e.g. feature/TEST-12344
+          target_branch="${{ github.base_ref }}" # e.g. develop or stage
+          echo "Source branch: $src_branch"
+          echo "Target branch: $target_branch"
+          
+          ticket_id=$(echo "$src_branch" | sed -E 's#.*/##')  # Extract TEST-12344
+          echo "ticket_id=$ticket_id" >> $GITHUB_OUTPUT
+          echo "target_branch=$target_branch" >> $GITHUB_OUTPUT
+
+      - name: Set prefix based on target branch
+        id: prefix
+        run: |
+          if [[ "${{ github.base_ref }}" == "develop" ]]; then
+            echo "prefix=dev" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.base_ref }}" == "stage" ]]; then
+            echo "prefix=rel" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Unsupported target branch: ${{ github.base_ref }}"
+            exit 1
+          fi
+
+      - name: Determine next available tag
+        id: next_tag
+        run: |
+          base_tag="${{ steps.prefix.outputs.prefix }}-${{ steps.branch.outputs.ticket_id }}"
+          echo "Base tag: $base_tag"
+          
+          existing_tags=$(git tag -l "${base_tag}*")
+          if [ -z "$existing_tags" ]; then
+            new_tag="$base_tag"
+          else
+            count=$(echo "$existing_tags" | grep -E "^${base_tag}(-[0-9]+)?$" | wc -l | tr -d ' ')
+            next_num=$((count + 1))
+            new_tag="${base_tag}-${next_num}"
+          fi
+          
+          echo "✅ New tag will be: $new_tag"
+          echo "tag=$new_tag" >> $GITHUB_OUTPUT
+
+      - name: Create and push new tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git tag ${{ steps.next_tag.outputs.tag }}
+          git push origin ${{ steps.next_tag.outputs.tag }}
