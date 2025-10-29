@@ -2,7 +2,8 @@ name: Manual Deploy to Acquia
 
 on:
   push:
-    branches: [ "develop", "stage" ]
+    tags:
+      - '*'
 
 permissions:
   contents: write
