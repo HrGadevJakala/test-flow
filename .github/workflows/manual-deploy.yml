@@ -1,0 +1,23 @@
+name: Manual Deploy to Acquia
+
+on:
+  push:
+    branches: [ "develop", "stage" ]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-to-acquia-manual:
+    name: Deploy to Acquia (Manual Trigger)
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Acquia using acli
+        run: |
+          echo "Deploying manually triggered tag"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "Workspace=$GITHUB_WORKSPACE"
