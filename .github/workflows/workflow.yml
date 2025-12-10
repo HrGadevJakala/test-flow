@@ -18,7 +18,6 @@ jobs:
   build:
     name: Build BE & FE
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -190,7 +189,7 @@ jobs:
     name: Deploy to Acquia with tag
     runs-on: ubuntu-latest
     needs: create-tag
-    if: needs.create-tag.outputs.tag != ''
+    if: github.event_name == 'pull_request' && needs.create-tag.outputs.tag != ''
     env:
       TAG_NAME: ${{ needs.create-tag.outputs.tag }}
     steps:
