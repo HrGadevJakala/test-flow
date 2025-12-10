@@ -63,11 +63,15 @@ jobs:
         run: |
           src_branch="${{ github.head_ref }}"   # e.g. feature/TEST-12344
           target_branch="${{ github.base_ref }}" # e.g. develop or stage
+          
           echo "Source branch: $src_branch"
           echo "Target branch: $target_branch"
           
           ticket_id=$(echo "$src_branch" | sed -E 's#.*/##')  # Extract TEST-12344
+          ticket_num=$(echo "$ticket_id" | grep -oE '[0-9]+$') # Extract 12344
+          
           echo "ticket_id=$ticket_id" >> $GITHUB_OUTPUT
+          echo "ticket_num=$ticket_num" >> $GITHUB_OUTPUT
           echo "target_branch=$target_branch" >> $GITHUB_OUTPUT
 
       - name: Set prefix based on target branch
@@ -82,7 +86,6 @@ jobs:
             exit 1
           fi
 
-<<<<<<< Updated upstream
       - name: Determine next available tag
         id: next_tag
         run: |
@@ -99,24 +102,24 @@ jobs:
           fi
           
           echo "✅ New tag will be: $new_tag"
-=======
-#      - name: Determine next available environment-wide ID
-#        id: next_env_id
-#        run: |
-#          prefix="${{ steps.prefix.outputs.prefix }}"
-#
-#          # Get existing tags for this environment, e.g. dev-*, rel-*
-#          existing_tags=$(git tag -l "${prefix}-*")
-#          if [ -z "$existing_tags" ]; then
-#            next_env_num=1
-#          else
-#            # Extract the middle number part: dev-<num>-<branchnum>
-#            max_num=$(echo "$existing_tags" | grep -oE "${prefix}-[0-9]+" | grep -oE '[0-9]+' | sort -n | tail -1)
-#            next_env_num=$((max_num + 1))
-#          fi
-#
-#          echo "next_env_num=$next_env_num" >> $GITHUB_OUTPUT
-#          echo "Next environment ID: $next_env_num"
+
+      #      - name: Determine next available environment-wide ID
+      #        id: next_env_id
+      #        run: |
+      #          prefix="${{ steps.prefix.outputs.prefix }}"
+      #
+      #          # Get existing tags for this environment, e.g. dev-*, rel-*
+      #          existing_tags=$(git tag -l "${prefix}-*")
+      #          if [ -z "$existing_tags" ]; then
+      #            next_env_num=1
+      #          else
+      #            # Extract the middle number part: dev-<num>-<branchnum>
+      #            max_num=$(echo "$existing_tags" | grep -oE "${prefix}-[0-9]+" | grep -oE '[0-9]+' | sort -n | tail -1)
+      #            next_env_num=$((max_num + 1))
+      #          fi
+      #
+      #          echo "next_env_num=$next_env_num" >> $GITHUB_OUTPUT
+      #          echo "Next environment ID: $next_env_num"
       - name: Determine next SemVer
         id: next_semver
         run: |
@@ -160,28 +163,27 @@ jobs:
           new_tag="${prefix}-${semver}-${branch_num}"
           
           echo "New tag will be: $new_tag"
->>>>>>> Stashed changes
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
-#      - name: Build new tag name
-#        id: new_tag
-#        run: |
-#          prefix="${{ steps.prefix.outputs.prefix }}"
-#          env_num="${{ steps.next_env_id.outputs.next_env_num }}"
-#          branch_num="${{ steps.branch.outputs.ticket_num }}"
-#
-#          new_tag="${prefix}-${env_num}-${branch_num}"
-#
-#          echo "✅ New tag will be: $new_tag"
-#          echo "tag=$new_tag" >> $GITHUB_OUTPUT
+      #      - name: Build new tag name
+      #        id: new_tag
+      #        run: |
+      #          prefix="${{ steps.prefix.outputs.prefix }}"
+      #          env_num="${{ steps.next_env_id.outputs.next_env_num }}"
+      #          branch_num="${{ steps.branch.outputs.ticket_num }}"
+      #
+      #          new_tag="${prefix}-${env_num}-${branch_num}"
+      #
+      #          echo "✅ New tag will be: $new_tag"
+      #          echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
       - name: Create and push new tag
         id: push_tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git tag ${{ steps.next_tag.outputs.tag }}
-          git push origin ${{ steps.next_tag.outputs.tag }}
-          echo "tag=${{ steps.next_tag.outputs.tag }}" >> $GITHUB_OUTPUT
+          git tag ${{ steps.new_tag.outputs.tag }}
+          git push origin ${{ steps.new_tag.outputs.tag }}
+          echo "tag=${{ steps.new_tag.outputs.tag }}" >> $GITHUB_OUTPUT
 
   deploy-to-acquia:
     name: Deploy to Acquia with tag
