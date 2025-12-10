@@ -47,6 +47,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Debug
+        run: |
+          echo "Head ref: ${{ github.event.pull_request.head.ref }}"
+          echo "Base ref: ${{ github.event.pull_request.base.ref }}"
+          echo "head: ${{ github.head_ref }}"
+          echo "base: ${{ github.base_ref }}"
+          echo "action: ${{ github.event.action }}"
+
       - name: Fetch all tags
         run: git fetch --tags
 
@@ -78,35 +86,95 @@ jobs:
             exit 1
           fi
 
-      - name: Determine next available environment-wide ID
-        id: next_env_id
+      - name: Determine next available tag
+        id: next_tag
+        run: |
+          base_tag="${{ steps.prefix.outputs.prefix }}-${{ steps.branch.outputs.ticket_id }}"
+          echo "Base tag: $base_tag"
+          
+          existing_tags=$(git tag -l "${base_tag}*")
+          if [ -z "$existing_tags" ]; then
+            new_tag="$base_tag"
+          else
+            count=$(echo "$existing_tags" | grep -E "^${base_tag}(-[0-9]+)?$" | wc -l | tr -d ' ')
+            next_num=$((count + 1))
+            new_tag="${base_tag}-${next_num}"
+          fi
+          
+          echo "✅ New tag will be: $new_tag"
+
+#      - name: Determine next available environment-wide ID
+#        id: next_env_id
+#        run: |
+#          prefix="${{ steps.prefix.outputs.prefix }}"
+#
+#          # Get existing tags for this environment, e.g. dev-*, rel-*
+#          existing_tags=$(git tag -l "${prefix}-*")
+#          if [ -z "$existing_tags" ]; then
+#            next_env_num=1
+#          else
+#            # Extract the middle number part: dev-<num>-<branchnum>
+#            max_num=$(echo "$existing_tags" | grep -oE "${prefix}-[0-9]+" | grep -oE '[0-9]+' | sort -n | tail -1)
+#            next_env_num=$((max_num + 1))
+#          fi
+#
+#          echo "next_env_num=$next_env_num" >> $GITHUB_OUTPUT
+#          echo "Next environment ID: $next_env_num"
+      - name: Determine next SemVer
+        id: next_semver
         run: |
           prefix="${{ steps.prefix.outputs.prefix }}"
-  
-          # Get existing tags for this environment, e.g. dev-*, rel-*
+
+          # List tags for this environment (ex: dev-*, rel-*)
           existing_tags=$(git tag -l "${prefix}-*")
+
           if [ -z "$existing_tags" ]; then
-            next_env_num=1
+            next_semver="1.0.0"
           else
-            # Extract the middle number part: dev-<num>-<branchnum>
-            max_num=$(echo "$existing_tags" | grep -oE "${prefix}-[0-9]+" | grep -oE '[0-9]+' | sort -n | tail -1)
-            next_env_num=$((max_num + 1))
+            # Extract only the semver portion: dev-1.2.3-456 → 1.2.3
+            semvers=$(echo "$existing_tags" | grep -oE "${prefix}-[0-9]+\.[0-9]+\.[0-9]+-" | sed -E "s#${prefix}-([0-9]+\.[0-9]+\.[0-9]+)-#\1#")
+
+            if [ -z "$semvers" ]; then
+              next_semver="1.0.0"
+            else
+              # Sort and take highest semver
+              highest=$(echo "$semvers" | sort -V | tail -1)
+
+              # Increment PATCH number
+              major=$(echo "$highest" | cut -d. -f1)
+              minor=$(echo "$highest" | cut -d. -f2)
+              patch=$(echo "$highest" | cut -d. -f3)
+
+              patch=$((patch + 1))
+              next_semver="${major}.${minor}.${patch}"
+            fi
           fi
-  
-          echo "next_env_num=$next_env_num" >> $GITHUB_OUTPUT
-          echo "Next environment ID: $next_env_num"
+
+          echo "next_semver=$next_semver" >> $GITHUB_OUTPUT
+          echo "Next SemVer version: $next_semver"
 
       - name: Build new tag name
         id: new_tag
         run: |
           prefix="${{ steps.prefix.outputs.prefix }}"
-          env_num="${{ steps.next_env_id.outputs.next_env_num }}"
+          semver="${{ steps.next_semver.outputs.next_semver }}"
           branch_num="${{ steps.branch.outputs.ticket_num }}"
-  
-          new_tag="${prefix}-${env_num}-${branch_num}"
-  
-          echo "✅ New tag will be: $new_tag"
+          
+          new_tag="${prefix}-${semver}-${branch_num}"
+          
+          echo "New tag will be: $new_tag"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
+#      - name: Build new tag name
+#        id: new_tag
+#        run: |
+#          prefix="${{ steps.prefix.outputs.prefix }}"
+#          env_num="${{ steps.next_env_id.outputs.next_env_num }}"
+#          branch_num="${{ steps.branch.outputs.ticket_num }}"
+#
+#          new_tag="${prefix}-${env_num}-${branch_num}"
+#
+#          echo "✅ New tag will be: $new_tag"
+#          echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
       - name: Create and push new tag
         id: push_tag
@@ -122,9 +190,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: create-tag
     if: needs.create-tag.outputs.tag != ''
+    env:
+      TAG_NAME: ${{ needs.create-tag.outputs.tag }}
     steps:
       - name: Debug - Print environment and workspace
         run: |
           echo "Deploying tag: ${{ needs.create-tag.outputs.tag }}"
           echo "GITHUB_SHA=$GITHUB_SHA"
           echo "Workspace=$GITHUB_WORKSPACE"
+
+      - name: Validate tag format
+        shell: bash
+        run: |
+          if ! [[ "$TAG_NAME" =~ ^(dev|rel)-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+            echo "Invalid tag format. Must follow: prefix-MAJOR.MINOR.PATCH-ticketNumber"
+            exit 1
+          else
+            echo "Tag format is valid: $TAG_NAME"
+          fi
