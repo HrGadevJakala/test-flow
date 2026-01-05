@@ -17,7 +17,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check for duplicate tag
+        id: duplicate_check
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          echo "Checking if tag already existed: $TAG"
+
+          # Count how many remote refs match this tag
+          count=$(git ls-remote --tags origin "$TAG" | wc -l | tr -d ' ')
+
+          if [ "$count" -gt 1 ]; then
+            echo "❌ Tag already existed before this push"
+            echo "duplicate=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ New tag detected"
+            echo "duplicate=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy to Acquia using acli
+        if: steps.duplicate_check.outputs.duplicate != 'true'
         run: |
           echo "Deploying manually triggered tag"
           echo "GITHUB_SHA=$GITHUB_SHA"
