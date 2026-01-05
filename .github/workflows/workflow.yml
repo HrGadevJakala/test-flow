@@ -80,28 +80,63 @@ jobs:
           if [[ "${{ github.base_ref }}" == "develop" ]]; then
             echo "prefix=dev" >> $GITHUB_OUTPUT
           elif [[ "${{ github.base_ref }}" == "stage" ]]; then
-            echo "prefix=rel" >> $GITHUB_OUTPUT
+            echo "prefix=test" >> $GITHUB_OUTPUT
           else
             echo "❌ Unsupported target branch: ${{ github.base_ref }}"
             exit 1
           fi
 
-      - name: Determine next available tag
-        id: next_tag
+#      - name: Determine next available tag
+#        id: next_tag
+#        run: |
+#          base_tag="${{ steps.prefix.outputs.prefix }}-${{ steps.branch.outputs.ticket_id }}"
+#          echo "Base tag: $base_tag"
+#
+#          existing_tags=$(git tag -l "${base_tag}*")
+#          if [ -z "$existing_tags" ]; then
+#            new_tag="$base_tag"
+#          else
+#            count=$(echo "$existing_tags" | grep -E "^${base_tag}(-[0-9]+)?$" | wc -l | tr -d ' ')
+#            next_num=$((count + 1))
+#            new_tag="${base_tag}-${next_num}"
+#          fi
+#
+#          echo "✅ New tag will be: $new_tag"
+
+      - name: Determine next branch-based tag
+        id: new_tag
         run: |
-          base_tag="${{ steps.prefix.outputs.prefix }}-${{ steps.branch.outputs.ticket_id }}"
+          prefix="${{ steps.prefix.outputs.prefix }}"
+          branch_num="${{ steps.branch.outputs.ticket_num }}"
+
+          base_tag="${prefix}-${branch_num}"
           echo "Base tag: $base_tag"
-          
+
+          # Find all tags matching dev-23 or dev-23.*
           existing_tags=$(git tag -l "${base_tag}*")
+
           if [ -z "$existing_tags" ]; then
+            # First release for this branch
             new_tag="$base_tag"
           else
-            count=$(echo "$existing_tags" | grep -E "^${base_tag}(-[0-9]+)?$" | wc -l | tr -d ' ')
-            next_num=$((count + 1))
-            new_tag="${base_tag}-${next_num}"
+            # Extract numeric bugfix suffixes (the .N part)
+            max_suffix=$(echo "$existing_tags" \
+              | grep -oE "^${base_tag}\.[0-9]+$" \
+              | sed "s/^${base_tag}\.//" \
+              | sort -n \
+              | tail -1)
+
+            if [ -z "$max_suffix" ]; then
+              # Base tag exists, but no .N yet
+              new_tag="${base_tag}.1"
+            else
+              next_suffix=$((max_suffix + 1))
+              new_tag="${base_tag}.${next_suffix}"
+            fi
           fi
-          
+
           echo "✅ New tag will be: $new_tag"
+          echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
       #      - name: Determine next available environment-wide ID
       #        id: next_env_id
@@ -121,50 +156,51 @@ jobs:
       #          echo "next_env_num=$next_env_num" >> $GITHUB_OUTPUT
       #          echo "Next environment ID: $next_env_num"
 
-      - name: Determine next SemVer
-        id: next_semver
-        run: |
-          prefix="${{ steps.prefix.outputs.prefix }}"
+#      - name: Determine next SemVer
+#        id: next_semver
+#        run: |
+#          prefix="${{ steps.prefix.outputs.prefix }}"
+#
+#          # List tags for this environment (ex: dev-*, rel-*)
+#          existing_tags=$(git tag -l "${prefix}-*")
+#
+#          if [ -z "$existing_tags" ]; then
+#            next_semver="1.0.0"
+#          else
+#            # Extract only the semver portion: dev-1.2.3-456 → 1.2.3
+#            semvers=$(echo "$existing_tags" | grep -oE "${prefix}-[0-9]+\.[0-9]+\.[0-9]+-" | sed -E "s#${prefix}-([0-9]+\.[0-9]+\.[0-9]+)-#\1#")
+#
+#            if [ -z "$semvers" ]; then
+#              next_semver="1.0.0"
+#            else
+#              # Sort and take highest semver
+#              highest=$(echo "$semvers" | sort -V | tail -1)
+#
+#              # Increment PATCH number
+#              major=$(echo "$highest" | cut -d. -f1)
+#              minor=$(echo "$highest" | cut -d. -f2)
+#              patch=$(echo "$highest" | cut -d. -f3)
+#
+#              patch=$((patch + 1))
+#              next_semver="${major}.${minor}.${patch}"
+#            fi
+#          fi
+#
+#          echo "next_semver=$next_semver" >> $GITHUB_OUTPUT
+#          echo "Next SemVer version: $next_semver"
 
-          # List tags for this environment (ex: dev-*, rel-*)
-          existing_tags=$(git tag -l "${prefix}-*")
+#      - name: Build new tag name
+#        id: new_tag
+#        run: |
+#          prefix="${{ steps.prefix.outputs.prefix }}"
+#          semver="${{ steps.next_semver.outputs.next_semver }}"
+#          branch_num="${{ steps.branch.outputs.ticket_num }}"
+#
+#          new_tag="${prefix}-${semver}-${branch_num}"
+#
+#          echo "New tag will be: $new_tag"
+#          echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
-          if [ -z "$existing_tags" ]; then
-            next_semver="1.0.0"
-          else
-            # Extract only the semver portion: dev-1.2.3-456 → 1.2.3
-            semvers=$(echo "$existing_tags" | grep -oE "${prefix}-[0-9]+\.[0-9]+\.[0-9]+-" | sed -E "s#${prefix}-([0-9]+\.[0-9]+\.[0-9]+)-#\1#")
-
-            if [ -z "$semvers" ]; then
-              next_semver="1.0.0"
-            else
-              # Sort and take highest semver
-              highest=$(echo "$semvers" | sort -V | tail -1)
-
-              # Increment PATCH number
-              major=$(echo "$highest" | cut -d. -f1)
-              minor=$(echo "$highest" | cut -d. -f2)
-              patch=$(echo "$highest" | cut -d. -f3)
-
-              patch=$((patch + 1))
-              next_semver="${major}.${minor}.${patch}"
-            fi
-          fi
-
-          echo "next_semver=$next_semver" >> $GITHUB_OUTPUT
-          echo "Next SemVer version: $next_semver"
-
-      - name: Build new tag name
-        id: new_tag
-        run: |
-          prefix="${{ steps.prefix.outputs.prefix }}"
-          semver="${{ steps.next_semver.outputs.next_semver }}"
-          branch_num="${{ steps.branch.outputs.ticket_num }}"
-          
-          new_tag="${prefix}-${semver}-${branch_num}"
-          
-          echo "New tag will be: $new_tag"
-          echo "tag=$new_tag" >> $GITHUB_OUTPUT
       #      - name: Build new tag name
       #        id: new_tag
       #        run: |
